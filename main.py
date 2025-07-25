@@ -4,7 +4,7 @@ import numpy as np
 import uuid
 import os
 from keras.models import load_model
-
+import tensorflow as tf
 
 # -------- to prevent .h5 incompatibility error (from stackoverflow) ------------- #
 
@@ -26,12 +26,22 @@ assert model_config_string.find('"groups": 1,') == -1
 np.set_printoptions(suppress=True)
 
 # Load the model
-model = load_model("keras_Model.h5", compile=False)
+model = load_model("keras_Model.h5", compile=True)
+
+print(model.summary())
 
 # ['0 ka kyee\n', '1 kha khway\n', ... ]
 class_names = open("labels.txt", "r").readlines()
 
 # ---------------------------------------------------- #
+
+save_mode, brush_mode = False, True
+
+threshold = 50 # between middle and index fingers tips
+
+brush_size = 5
+
+safe_w, safe_h = 640, 480
 
 
 def restart_canvas(chn3=True):
@@ -44,13 +54,16 @@ def restart_canvas(chn3=True):
         # return np.zeros((480, 640, 3), dtype=np.uint8)
 
 
+canvas, contour_canvas, clean_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False), restart_canvas(chn3=True)
+
+
+# imitates teachable machines preprocessing steps
 def preprocess_alphabet(image):
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) # model requires RGB
-    resized = cv2.resize(image, (224, 224))  # Resize to 224x224
-    # cv2.imshow('224x224', resized)
-    resized = resized.astype('float32') / 255.0  # Normalize to [0, 1]
-    resized = np.expand_dims(resized, axis=0)  # Shape: (1, 224, 224, 3) - Add batch dimension
-    return resized
+    image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LANCZOS4)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
+    image = (image / 127.5) - 1
+    image = np.asarray(image, dtype=np.float32).reshape(1, 224, 224, 3)
+    return image
 
 
 def save_userinput(class_name, image):
@@ -64,182 +77,168 @@ def save_userinput(class_name, image):
     return cv2.imwrite(f'./userinput/{folder_name}/{random_filename}.jpg', image)
 
 
-def predict_alphabet(image):
+def predict_alphabet(image, text_loc):
     prediction = model.predict(image)  # class probabilites [x, x, ...] 
-    index      = np.argmax(prediction)  # argmax flattens and get index
+    index      = np.argmax(prediction)  # argmax flattens the array and return index
     class_name = class_names[index]
     confidence_score = prediction[0][index]
 
-    cv2.putText(canvas, f'{class_name}-{confidence_score:.2f}', (x_min-10, y_min-10), 
+    cv2.putText(canvas, f'{class_name}-{str(np.round(confidence_score * 100))[:-2], "%"}', (text_loc[0]-10, text_loc[1]-10), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
     
     return class_name
 
 
-desired_w = 1331  # desired frame size
-desired_h = 222
-safe_w = 640
-safe_h = 480
+def run():
 
-vc = cv2.VideoCapture(index=0)
-vc.set(cv2.CAP_PROP_FRAME_WIDTH, desired_w)
-vc.set(cv2.CAP_PROP_FRAME_HEIGHT, desired_h)
-success, _ = vc.read()
+    global canvas, contour_canvas, clean_canvas
+    global save_mode, brush_mode, threshold, brush_size
 
-if success:
-    safe_w = vc.get(cv2.CAP_PROP_FRAME_WIDTH)
-    safe_h = vc.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    delay_frames = 0  # delay counter before drawing contours
 
-# print(safe_w, safe_h)
-# print(vc.get(cv2.CAP_PROP_FPS))
+    prev_x, prev_y = None, None  # previous finger position
 
-canvas, contour_canvas, clean_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False), restart_canvas(chn3=True)
+    # Initialize MediaPipe Hands
+    mp_hands   = mp.solutions.hands
 
-save_mode  = True
-brush_mode = True
+    # Instantiate the Hands class
+    hands = mp_hands.Hands(
+        static_image_mode=False,       # False for video streams (better performance)
+        max_num_hands=1,               # Max number of hands to detect
+        min_detection_confidence=0.5,  # Confidence threshold to start tracking
+        min_tracking_confidence=0.5    # Confidence threshold to continue tracking
+    )
 
-delay_frames = 0  # delay counter before drawing contours
+    # For drawing landmarks
+    mp_drawing = mp.solutions.drawing_utils 
 
-threshold  = 50  # between middle and index fingers tips
-brush_size = 5
+    vc = cv2.VideoCapture(index=0)
+    vc.set(cv2.CAP_PROP_FRAME_WIDTH, safe_w)
+    vc.set(cv2.CAP_PROP_FRAME_HEIGHT, safe_h)
 
-cropped = None
-prev_x, prev_y = None, None  # previous finger position
+    while vc.isOpened():
+        _, frame = vc.read()
 
-# Solutions API
+        frame = cv2.flip(src=frame, flipCode=1)
 
-# Initialize MediaPipe Hands
-mp_hands   = mp.solutions.hands
+        # media pipe requires RGB
+        rgb_frame = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
 
-# Instantiate the Hands class
-hands = mp_hands.Hands(
-    static_image_mode=False,       # False for video streams (better performance)
-    max_num_hands=1,               # Max number of hands to detect
-    min_detection_confidence=0.5,  # Confidence threshold to start tracking
-    min_tracking_confidence=0.5    # Confidence threshold to continue tracking
-)
+        detect = hands.process(rgb_frame)
 
-# For drawing landmarks
-mp_drawing = mp.solutions.drawing_utils  
+        # frame height, width and number of channels (3)
+        h, w, _ = frame.shape
 
-while vc.isOpened():
-    _, frame = vc.read()
+        # if hand is detected
+        if detect.multi_hand_landmarks:
 
-    frame = cv2.flip(src=frame, flipCode=1)
+            for hand_landmarks in detect.multi_hand_landmarks:
 
-    # media pipe requires RGB
-    rgb_frame = cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB)
+                mp_drawing.draw_landmarks(
+                    frame, 
+                    hand_landmarks, 
+                    mp_hands.HAND_CONNECTIONS,
+                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2),  # Landmark color
+                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2)   # Connection color
+                )
 
-    detect = hands.process(rgb_frame)
+                # landmark node (x, y) is standarized to be [0, 1], 
+                # so to get its position on frame, multiply it with frame values (finger.x * frame.x)
+                finger_tip = hand_landmarks.landmark[8] 
+                thumb_tip  = hand_landmarks.landmark[12] # middle finger, not thumb
 
-    # frame height, width and number of channels (3)
-    h, w, ch = frame.shape
+                (finger_x, finger_y) = (int(finger_tip.x * w), int(finger_tip.y * h))
+                (thumb_x, thumb_y)   = (int(thumb_tip.x * w), int(thumb_tip.y * h))
 
-    # if hand is detected
-    if detect.multi_hand_landmarks:
+                # Compute Euclidean distance between index and thumb tips
+                distance = np.linalg.norm(np.array([finger_x, finger_y]) - np.array([thumb_x, thumb_y]))
 
-        for hand_landmarks in detect.multi_hand_landmarks:
+                if distance > threshold:
 
-            mp_drawing.draw_landmarks(
-                frame, 
-                hand_landmarks, 
-                mp_hands.HAND_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2),  # Landmark color
-                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2)   # Connection color
-            )
+                    delay_frames = 0
 
-            # landmark node (x, y) is standarized to be [0, 1], 
-            # so to get its position on frame, multiply it with frame values (finger.x * frame.x)
-            finger_tip = hand_landmarks.landmark[8] 
-            thumb_tip  = hand_landmarks.landmark[12]
+                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 255, 255), -1) # yellow preview circle
+                    
+                    # draw on canvas if finger is moving
+                    if prev_x and prev_y:
+                        cv2.line(canvas, (prev_x, prev_y), (finger_x, finger_y), (255, 255, 255), brush_size)
+                        cv2.line(clean_canvas, (prev_x, prev_y), (finger_x, finger_y), (255, 255, 255), brush_size)
+                    
+                    prev_x, prev_y = finger_x, finger_y
 
-            (finger_x, finger_y) = (int(finger_tip.x * w), int(finger_tip.y * h))
-            (thumb_x, thumb_y)   = (int(thumb_tip.x * w), int(thumb_tip.y * h))
+                else:
+                    # red circle to show that currently not drawing
+                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 0, 255), -1)
 
-            # Compute Euclidean distance between index and thumb tips
-            distance = np.linalg.norm(np.array([finger_x, finger_y]) - np.array([thumb_x, thumb_y]))
+                    if brush_mode:
+                        prev_x, prev_y = None, None
 
-            if distance > threshold:
+                    delay_frames += 1 if brush_mode else 0.2
 
-                delay_frames = 0
+        # if hand is not detected
+        else:
+            delay_frames += 1 if brush_mode else 0.2
 
-                cv2.circle(frame, (finger_x, finger_y), 5, (0, 255, 255), -1) # yellow preview circle
-                
-                # draw on canvas if finger is moving
-                if prev_x and prev_y:
-                    cv2.line(canvas, (prev_x, prev_y), (finger_x, finger_y), (255, 255, 255), brush_size)
-                    cv2.line(clean_canvas, (prev_x, prev_y), (finger_x, finger_y), (255, 255, 255), brush_size)
-                
-                prev_x, prev_y = finger_x, finger_y
+        # print(delay_frames)
 
-            else:
-                # red circle to show that currently not drawing
-                cv2.circle(frame, (finger_x, finger_y), 5, (0, 0, 255), -1)
+        if delay_frames > 20:
+            # find contours from clean_canvas
+            contours, _ = cv2.findContours(cv2.cvtColor(clean_canvas, cv2.COLOR_BGR2GRAY), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(contour_canvas, contours, -1, 255) # -1 means draw all contours
 
-                if brush_mode:
-                    prev_x, prev_y = None, None
+            if contours:
+                # smallest x-axis and y-axis value out of all contours drawn on contour_canvas currently
+                # boundingRect(c) -> top left x,y values and width and height of c
+                x_min = min(cv2.boundingRect(c)[0] for c in contours)
+                y_min = min(cv2.boundingRect(c)[1] for c in contours)
+                x_max = max(cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2] for c in contours)
+                y_max = max(cv2.boundingRect(c)[1] + cv2.boundingRect(c)[3] for c in contours)
 
-                delay_frames += 1 if brush_mode else 0.2
+                cropped = clean_canvas.copy()[y_min: y_max, x_min: x_max]
+                cropped = cv2.resize(cropped, (83, 84), interpolation=cv2.INTER_LANCZOS4)  
 
-    # if hand is not detected
-    else:
-        delay_frames += 1 if brush_mode else 0.2
+                # cv2.imshow('83x84', cropped)
 
-    if delay_frames > 20:
-        # find contours from clean_canvas
-        contours, _ = cv2.findContours(cv2.cvtColor(clean_canvas, cv2.COLOR_BGR2GRAY), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(contour_canvas, contours, -1, 255) # -1 means draw all contours
+                cv2.rectangle(canvas, (x_min, y_min), (x_max, y_max), 255, 3)
+                clean_canvas, contour_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False)
 
-        if contours:
-            # smallest x-axis and y-axis value out of all contours drawn on contour_canvas currently
-            # boundingRect(c) -> top left x,y values and width and height of c
-            x_min = min(cv2.boundingRect(c)[0] for c in contours)
-            y_min = min(cv2.boundingRect(c)[1] for c in contours)
-            x_max = max(cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2] for c in contours)
-            y_max = max(cv2.boundingRect(c)[1] + cv2.boundingRect(c)[3] for c in contours)
+                preprocessed_img = preprocess_alphabet(image=cropped)
+                predicted_class = predict_alphabet(image=preprocessed_img, text_loc=(x_min, y_min))
 
-            cropped = clean_canvas.copy()[y_min: y_max, x_min: x_max]
-            cropped = cv2.resize(cropped, (83, 84))  
+                if save_mode: 
+                    save_userinput(class_name=predicted_class, image=cropped)
 
-            # cv2.imshow('83x84', cropped)
+        # overlay two images
+        frame = cv2.addWeighted(frame, 0.6, canvas, 0.4, 0)
+        
+        if brush_mode:
+            mode = 'brush'
+        else:
+            mode = 'line'
+        cv2.putText(frame, f'Mode:{mode}', (10,60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
+        cv2.putText(frame, f'threshold:{threshold}', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
 
-            cv2.rectangle(canvas, (x_min, y_min), (x_max, y_max), 255, 3)
-            clean_canvas, contour_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False)
+        cv2.imshow('frame', frame)
+        # cv2.imshow('canvas', canvas)
+        # cv2.imshow('clean canvas', clean_canvas)
+        # cv2.imshow('contour canvas', contour_canvas)
 
-            preprocessed_img = preprocess_alphabet(image=cropped)
-            predicted_class = predict_alphabet(image=preprocessed_img)
+        key = cv2.waitKey(1)
+        if key == 27: # esc
+            break
+        elif key == ord('m'): # m - 109
+            threshold += 1
+        elif key == ord('n'): # n - 110
+            threshold -= 1
+        elif key == ord('d'):
+            canvas = restart_canvas(chn3=True)
+        # elif key == ord('s'):
+            # save_mode = not save_mode
+        elif key == ord('p'):
+            brush_mode = not brush_mode
 
-            if save_mode: 
-                save_userinput(class_name=predicted_class, image=cropped)
+    vc.release()
+    cv2.destroyAllWindows()
 
-    # overlay two images
-    frame = cv2.addWeighted(frame, 0.6, canvas, 0.4, 0)
-    
-    if brush_mode:
-        mode = 'brush'
-    else:
-        mode = 'line'
-    cv2.putText(frame, f'Mode:{mode}', (10,60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
-    cv2.putText(frame, f'threshold:{threshold}', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
-
-    cv2.imshow('frame', frame)
-    # cv2.imshow('canvas', canvas)
-    # cv2.imshow('clean canvas', clean_canvas)
-    # cv2.imshow('contour canvas', contour_canvas)
-
-    key = cv2.waitKey(1)
-    if key == 27: # esc
-        break
-    elif key == ord('m'): # m - 109
-        threshold += 1
-    elif key == ord('n'): # n - 110
-        threshold -= 1
-    elif key == ord('d'):
-        canvas = restart_canvas(chn3=True)
-    elif key == ord('s'):
-        save_mode = not save_mode
-    elif key == ord('p'):
-        brush_mode = not brush_mode
-
-vc.release()
-cv2.destroyAllWindows()
+if __name__ == '__main__':
+    run()

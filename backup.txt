@@ -1,0 +1,7 @@
+# cv2.imwrite('./test/testimg.jpg', image)
+# image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) # model requires RGB
+# image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_AREA)  # Resize to 224x224
+# image = image.astype('float32') / 255.0  # Normalize to [0, 1]
+# image = (image.astype('float32') - 127.5) / 127.5  # Normalize to [-1, 1]
+# image = np.expand_dims(image, axis=0)  # Shape: (1, 224, 224, 3) - Add batch dimension
+# Resize the raw image into (224-height,224-width) pixels
