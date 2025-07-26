@@ -26,12 +26,14 @@ assert model_config_string.find('"groups": 1,') == -1
 np.set_printoptions(suppress=True)
 
 # Load the model
-model = load_model("keras_Model.h5", compile=True)
+keras_model = load_model('keras_model.h5', compile=True)
+mnv2_model = load_model('mobilenetv2_burmese.h5', compile=True)
 
-print(model.summary())
+# print(model.summary())
 
 # ['0 ka kyee\n', '1 kha khway\n', ... ]
-class_names = open("labels.txt", "r").readlines()
+keras_class_names = open('keras_labels.txt', 'r').readlines()
+mnv2_class_names = open('mobilenetv2_labels.txt', 'r').readlines()
 
 # ---------------------------------------------------- #
 
@@ -57,18 +59,29 @@ def restart_canvas(chn3=True):
 canvas, contour_canvas, clean_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False), restart_canvas(chn3=True)
 
 
+def strip_class_name(class_name):
+    space_index = class_name.find(' ')
+    stripped_name = class_name[space_index+1:-1].strip()
+
+    return stripped_name
+
+
 # imitates teachable machines preprocessing steps
 def preprocess_alphabet(image):
-    image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LANCZOS4)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
-    image = (image / 127.5) - 1
-    image = np.asarray(image, dtype=np.float32).reshape(1, 224, 224, 3)
+    #image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LANCZOS4)
+    #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
+    #image = (image / 127.5) - 1  # [-1, 1]
+    #image = np.asarray(image, dtype=np.float32).reshape(1, 224, 224, 3)
+
+    image = cv2.resize(image, (96, 96))
+    image = image / 255.0  # [0, 1]
+    image = np.asarray(image, dtype=np.float32).reshape(1, 96, 96, 3)
+
     return image
 
 
 def save_userinput(class_name, image):
-    space_index = class_name.find(' ')
-    folder_name = class_name[space_index+1:-1].strip()
+    folder_name = strip_class_name(class_name=class_name)
     random_filename = str(uuid.uuid4())
 
     if folder_name not in os.listdir('./userinput'):
@@ -78,12 +91,13 @@ def save_userinput(class_name, image):
 
 
 def predict_alphabet(image, text_loc):
-    prediction = model.predict(image)  # class probabilites [x, x, ...] 
+    prediction = mnv2_model.predict(image)  # class probabilites [x, x, ...]
     index      = np.argmax(prediction)  # argmax flattens the array and return index
-    class_name = class_names[index]
+    class_name = mnv2_class_names[index]
     confidence_score = prediction[0][index]
 
-    cv2.putText(canvas, f'{class_name}-{str(np.round(confidence_score * 100))[:-2], "%"}', (text_loc[0]-10, text_loc[1]-10), 
+    text = f'{strip_class_name(class_name)}-{str(np.round(confidence_score * 100))[:-2]}%'
+    cv2.putText(canvas, text, (text_loc[0]-10, text_loc[1]-10), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
     
     return class_name
@@ -212,11 +226,15 @@ def run():
         frame = cv2.addWeighted(frame, 0.6, canvas, 0.4, 0)
         
         if brush_mode:
-            mode = 'brush'
+            draw_mode = 'brush'
         else:
-            mode = 'line'
-        cv2.putText(frame, f'Mode:{mode}', (10,60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
-        cv2.putText(frame, f'threshold:{threshold}', (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1, cv2.LINE_AA)
+            draw_mode = 'line'
+
+        cv2.putText(frame, f'Mode:{draw_mode}, press `p` to switch mode', (5,15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
+        cv2.putText(frame, f'threshold:{threshold}, press `m` to increase and `n` to decrease', (5,30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
+        cv2.putText(frame, 'You are using a model based on MobileNetV2 model', (5,45), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
+        if save_mode: 
+            cv2.putText(frame, 'User inputs are being saved', (5,60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
 
         cv2.imshow('frame', frame)
         # cv2.imshow('canvas', canvas)
@@ -232,8 +250,8 @@ def run():
             threshold -= 1
         elif key == ord('d'):
             canvas = restart_canvas(chn3=True)
-        # elif key == ord('s'):
-            # save_mode = not save_mode
+        elif key == ord('s'):
+            save_mode = not save_mode
         elif key == ord('p'):
             brush_mode = not brush_mode
 
