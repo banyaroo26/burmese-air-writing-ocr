@@ -1,0 +1,6 @@
+opencv-python
+mediapipe
+numpy
+uuid
+tensorflow
+h5py
