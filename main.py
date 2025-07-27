@@ -4,44 +4,24 @@ import numpy as np
 import uuid
 import os
 from keras.models import load_model
-import tensorflow as tf
 import joblib
-from sklearn.linear_model import LogisticRegression
-
-# -------- to prevent .h5 incompatibility error (from stackoverflow) ------------- #
-
-import h5py
-
-f = h5py.File("keras_model.h5", mode="r+")
-model_config_string = f.attrs.get("model_config")
-
-if model_config_string.find('"groups": 1,') != -1:
-    model_config_string = model_config_string.replace('"groups": 1,', '')
-f.attrs.modify('model_config', model_config_string)
-f.flush()
-
-model_config_string = f.attrs.get("model_config")
-
-assert model_config_string.find('"groups": 1,') == -1
-
-# ---------------------------------------------------- #
 
 # Disable scientific notation for clarity
 np.set_printoptions(suppress=True)
 
 # Load the model
-keras_model  = load_model('keras_model.h5', compile=True)
-mnv2_model   = load_model('mobilenetv2_burmese.h5', compile=True)
-logreg_model = joblib.load('./sk_model_logreg.joblib')
+keras_model  = load_model('./models/teachable_machine/keras_model.h5', compile=True)
+mnv2_model   = load_model('./models/mobile_net_v2/mobilenetv2_burmese.h5', compile=True)
+logreg_model = joblib.load('./models/logistic_regression/sk_model_logreg.joblib')
 
 # label encoder for sklearn
-label_encoder = joblib.load('./sk_label_encoder.joblib')
+label_encoder = joblib.load('./models/logistic_regression/sk_label_encoder.joblib')
 
 # print(model.summary())
 
 # ['0 ka kyee\n', '1 kha khway\n', ... ]
-keras_class_names = open('keras_labels.txt', 'r').readlines()
-mnv2_class_names = open('mobilenetv2_labels.txt', 'r').readlines()
+keras_class_names = open('./models/teachable_machine/keras_labels.txt', 'r').readlines()
+mnv2_class_names = open('./models/mobile_net_v2/mobilenetv2_labels.txt', 'r').readlines()
 
 save_mode, brush_mode = False, True
 
@@ -219,11 +199,11 @@ def run():
                 cropped = clean_canvas.copy()[y_min: y_max, x_min: x_max]
                 cropped = cv2.resize(cropped, (83, 84), interpolation=cv2.INTER_LANCZOS4)  
 
-                print(cropped.shape)
+                # print(cropped.shape)
 
                 # test with logistic regression before 
                 log_reg_prediction = logreg_model.predict([np.array(cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)/255.0).flatten()])
-                print(label_encoder.classes_[log_reg_prediction])
+                print('Logistic Regression ' + str(label_encoder.classes_[log_reg_prediction][0]))
 
                 # cv2.imshow('83x84', cropped)
 

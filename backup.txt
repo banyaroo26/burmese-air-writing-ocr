@@ -5,3 +5,27 @@
 # image = (image.astype('float32') - 127.5) / 127.5  # Normalize to [-1, 1]
 # image = np.expand_dims(image, axis=0)  # Shape: (1, 224, 224, 3) - Add batch dimension
 # Resize the raw image into (224-height,224-width) pixels
+
+
+
+# -------- to prevent .h5 incompatibility error (from stackoverflow) ------------- #
+# -------- need this if using teachable machine model ------------ #
+
+'''
+import h5py
+import tensorflow as tf
+
+f = h5py.File("keras_model.h5", mode="r+")
+model_config_string = f.attrs.get("model_config")
+
+if model_config_string.find('"groups": 1,') != -1:
+    model_config_string = model_config_string.replace('"groups": 1,', '')
+f.attrs.modify('model_config', model_config_string)
+f.flush()
+
+model_config_string = f.attrs.get("model_config")
+
+assert model_config_string.find('"groups": 1,') == -1
+'''
+
+# ---------------------------------------------------- #
