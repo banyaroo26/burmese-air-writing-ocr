@@ -4,3 +4,5 @@ numpy
 uuid
 tensorflow
 h5py
+sckikit-learn
+joblib

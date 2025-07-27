@@ -5,6 +5,8 @@ import uuid
 import os
 from keras.models import load_model
 import tensorflow as tf
+import joblib
+from sklearn.linear_model import LogisticRegression
 
 # -------- to prevent .h5 incompatibility error (from stackoverflow) ------------- #
 
@@ -22,20 +24,24 @@ model_config_string = f.attrs.get("model_config")
 
 assert model_config_string.find('"groups": 1,') == -1
 
+# ---------------------------------------------------- #
+
 # Disable scientific notation for clarity
 np.set_printoptions(suppress=True)
 
 # Load the model
-keras_model = load_model('keras_model.h5', compile=True)
-mnv2_model = load_model('mobilenetv2_burmese.h5', compile=True)
+keras_model  = load_model('keras_model.h5', compile=True)
+mnv2_model   = load_model('mobilenetv2_burmese.h5', compile=True)
+logreg_model = joblib.load('./sk_model_logreg.joblib')
+
+# label encoder for sklearn
+label_encoder = joblib.load('./sk_label_encoder.joblib')
 
 # print(model.summary())
 
 # ['0 ka kyee\n', '1 kha khway\n', ... ]
 keras_class_names = open('keras_labels.txt', 'r').readlines()
 mnv2_class_names = open('mobilenetv2_labels.txt', 'r').readlines()
-
-# ---------------------------------------------------- #
 
 save_mode, brush_mode = False, True
 
@@ -56,7 +62,8 @@ def restart_canvas(chn3=True):
         # return np.zeros((480, 640, 3), dtype=np.uint8)
 
 
-canvas, contour_canvas, clean_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False), restart_canvas(chn3=True)
+# contour_canvas = restart_canvas(chn3=False)
+canvas, clean_canvas = restart_canvas(chn3=True), restart_canvas(chn3=True)
 
 
 def strip_class_name(class_name):
@@ -66,8 +73,8 @@ def strip_class_name(class_name):
     return stripped_name
 
 
-# imitates teachable machines preprocessing steps
 def preprocess_alphabet(image):
+    # imitates teachable machines preprocessing steps
     #image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LANCZOS4)
     #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
     #image = (image / 127.5) - 1  # [-1, 1]
@@ -105,7 +112,8 @@ def predict_alphabet(image, text_loc):
 
 def run():
 
-    global canvas, contour_canvas, clean_canvas
+    # global contour_canvas
+    global canvas, clean_canvas
     global save_mode, brush_mode, threshold, brush_size
 
     delay_frames = 0  # delay counter before drawing contours
@@ -198,10 +206,10 @@ def run():
         if delay_frames > 20:
             # find contours from clean_canvas
             contours, _ = cv2.findContours(cv2.cvtColor(clean_canvas, cv2.COLOR_BGR2GRAY), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(contour_canvas, contours, -1, 255) # -1 means draw all contours
+            # cv2.drawContours(contour_canvas, contours, -1, 255) # -1 means draw all contours
 
             if contours:
-                # smallest x-axis and y-axis value out of all contours drawn on contour_canvas currently
+                # smallest x-axis and y-axis value out of all contours drawn currently
                 # boundingRect(c) -> top left x,y values and width and height of c
                 x_min = min(cv2.boundingRect(c)[0] for c in contours)
                 y_min = min(cv2.boundingRect(c)[1] for c in contours)
@@ -211,10 +219,17 @@ def run():
                 cropped = clean_canvas.copy()[y_min: y_max, x_min: x_max]
                 cropped = cv2.resize(cropped, (83, 84), interpolation=cv2.INTER_LANCZOS4)  
 
+                print(cropped.shape)
+
+                # test with logistic regression before 
+                log_reg_prediction = logreg_model.predict([np.array(cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)/255.0).flatten()])
+                print(label_encoder.classes_[log_reg_prediction])
+
                 # cv2.imshow('83x84', cropped)
 
                 cv2.rectangle(canvas, (x_min, y_min), (x_max, y_max), 255, 3)
-                clean_canvas, contour_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False)
+                # clean_canvas, contour_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False)
+                clean_canvas = restart_canvas(chn3=True)
 
                 preprocessed_img = preprocess_alphabet(image=cropped)
                 predicted_class = predict_alphabet(image=preprocessed_img, text_loc=(x_min, y_min))
