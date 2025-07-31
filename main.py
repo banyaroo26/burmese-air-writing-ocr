@@ -11,7 +11,7 @@ np.set_printoptions(suppress=True)
 
 # Load the model
 keras_model  = load_model('./models/teachable_machine/keras_model.h5', compile=True)
-mnv2_model   = load_model('./models/mobile_net_v2/mobilenetv2_burmese.h5', compile=True)
+mnv2_model   = load_model('./models/augmented/augmented_burmese.h5', compile=True)
 logreg_model = joblib.load('./models/logistic_regression/sk_model_logreg.joblib')
 
 # label encoder for sklearn
@@ -21,7 +21,7 @@ label_encoder = joblib.load('./models/logistic_regression/sk_label_encoder.jobli
 
 # ['0 ka kyee\n', '1 kha khway\n', ... ]
 keras_class_names = open('./models/teachable_machine/keras_labels.txt', 'r').readlines()
-mnv2_class_names = open('./models/mobile_net_v2/mobilenetv2_labels.txt', 'r').readlines()
+mnv2_class_names = open('./models/augmented/labels.txt', 'r').readlines()
 
 save_mode, brush_mode = False, True
 
@@ -85,7 +85,7 @@ def predict_alphabet(image, text_loc):
 
     text = f'{strip_class_name(class_name)}-{str(np.round(confidence_score * 100))[:-2]}%'
     cv2.putText(canvas, text, (text_loc[0]-10, text_loc[1]-10), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
     
     return class_name
 
@@ -140,8 +140,8 @@ def run():
                     frame, 
                     hand_landmarks, 
                     mp_hands.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2),  # Landmark color
-                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2)   # Connection color
+                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2),  # Landmark color
+                    mp_drawing.DrawingSpec(color=(255, 255, 255), thickness=2)   # Connection color
                 )
 
                 # landmark node (x, y) is standarized to be [0, 1], 
@@ -159,7 +159,7 @@ def run():
 
                     delay_frames = 0
 
-                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 255, 255), -1) # yellow preview circle
+                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 255, 0), -1) # yellow preview circle
                     
                     # draw on canvas if finger is moving
                     if prev_x and prev_y:
@@ -170,7 +170,7 @@ def run():
 
                 else:
                     # red circle to show that currently not drawing
-                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 0, 255), -1)
+                    cv2.circle(frame, (finger_x, finger_y), 5, (255, 0, 0), -1)
 
                     if brush_mode:
                         prev_x, prev_y = None, None
