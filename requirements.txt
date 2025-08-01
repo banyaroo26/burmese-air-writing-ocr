@@ -6,4 +6,3 @@ tensorflow
 h5py
 sckikit-learn
 joblib
-gradio

@@ -2,7 +2,6 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from model import predict_alphabet, preprocess_alphabet, save_userinput
-import gradio as gr
 
 # Disable scientific notation for clarity
 np.set_printoptions(suppress=True)
