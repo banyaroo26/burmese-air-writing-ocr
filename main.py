@@ -1,27 +1,10 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-import uuid
-import os
-from keras.models import load_model
-import joblib
+from model import predict_alphabet, preprocess_alphabet, save_userinput
 
 # Disable scientific notation for clarity
 np.set_printoptions(suppress=True)
-
-# Load the model
-keras_model  = load_model('./models/teachable_machine/keras_model.h5', compile=True)
-mnv2_model   = load_model('./models/augmented/augmented_burmese.h5', compile=True)
-logreg_model = joblib.load('./models/logistic_regression/sk_model_logreg.joblib')
-
-# label encoder for sklearn
-label_encoder = joblib.load('./models/logistic_regression/sk_label_encoder.joblib')
-
-# print(model.summary())
-
-# ['0 ka kyee\n', '1 kha khway\n', ... ]
-keras_class_names = open('./models/teachable_machine/keras_labels.txt', 'r').readlines()
-mnv2_class_names = open('./models/augmented/labels.txt', 'r').readlines()
 
 save_mode, brush_mode = False, True
 
@@ -32,7 +15,7 @@ brush_size = 5
 safe_w, safe_h = 640, 480
 
 
-def restart_canvas(chn3=True):
+def clear_canvas(chn3=True):
     h, w = int(safe_h), int(safe_w)
     if chn3:
         return np.zeros((h, w, 3), dtype=np.uint8)
@@ -42,52 +25,8 @@ def restart_canvas(chn3=True):
         # return np.zeros((480, 640, 3), dtype=np.uint8)
 
 
-# contour_canvas = restart_canvas(chn3=False)
-canvas, clean_canvas = restart_canvas(chn3=True), restart_canvas(chn3=True)
-
-
-def strip_class_name(class_name):
-    space_index = class_name.find(' ')
-    stripped_name = class_name[space_index+1:-1].strip()
-
-    return stripped_name
-
-
-def preprocess_alphabet(image):
-    # imitates teachable machines preprocessing steps
-    #image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LANCZOS4)
-    #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
-    #image = (image / 127.5) - 1  # [-1, 1]
-    #image = np.asarray(image, dtype=np.float32).reshape(1, 224, 224, 3)
-
-    image = cv2.resize(image, (96, 96))
-    image = image / 255.0  # [0, 1]
-    image = np.asarray(image, dtype=np.float32).reshape(1, 96, 96, 3)
-
-    return image
-
-
-def save_userinput(class_name, image):
-    folder_name = strip_class_name(class_name=class_name)
-    random_filename = str(uuid.uuid4())
-
-    if folder_name not in os.listdir('./userinput'):
-        os.makedirs(f'./userinput/{folder_name}', exist_ok=True)
-
-    return cv2.imwrite(f'./userinput/{folder_name}/{random_filename}.jpg', image)
-
-
-def predict_alphabet(image, text_loc):
-    prediction = mnv2_model.predict(image)  # class probabilites [x, x, ...]
-    index      = np.argmax(prediction)  # argmax flattens the array and return index
-    class_name = mnv2_class_names[index]
-    confidence_score = prediction[0][index]
-
-    text = f'{strip_class_name(class_name)}-{str(np.round(confidence_score * 100))[:-2]}%'
-    cv2.putText(canvas, text, (text_loc[0]-10, text_loc[1]-10), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
-    
-    return class_name
+# contour_canvas = clear_canvas(chn3=False)
+canvas, clean_canvas = clear_canvas(chn3=True), clear_canvas(chn3=True)
 
 
 def run():
@@ -201,18 +140,14 @@ def run():
 
                 # print(cropped.shape)
 
-                # test with logistic regression before 
-                log_reg_prediction = logreg_model.predict([np.array(cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)/255.0).flatten()])
-                print('Logistic Regression ' + str(label_encoder.classes_[log_reg_prediction][0]))
-
                 # cv2.imshow('83x84', cropped)
 
                 cv2.rectangle(canvas, (x_min, y_min), (x_max, y_max), 255, 3)
-                # clean_canvas, contour_canvas = restart_canvas(chn3=True), restart_canvas(chn3=False)
-                clean_canvas = restart_canvas(chn3=True)
+                # clean_canvas, contour_canvas = clear_canvas(chn3=True), clear_canvas(chn3=False)
+                clean_canvas = clear_canvas(chn3=True)
 
                 preprocessed_img = preprocess_alphabet(image=cropped)
-                predicted_class = predict_alphabet(image=preprocessed_img, text_loc=(x_min, y_min))
+                predicted_class = predict_alphabet(canvas=canvas, image=preprocessed_img, text_loc=(x_min, y_min))
 
                 if save_mode: 
                     save_userinput(class_name=predicted_class, image=cropped)
@@ -244,7 +179,7 @@ def run():
         elif key == ord('n'): # n - 110
             threshold -= 1
         elif key == ord('d'):
-            canvas = restart_canvas(chn3=True)
+            canvas = clear_canvas(chn3=True)
         elif key == ord('s'):
             save_mode = not save_mode
         elif key == ord('p'):
@@ -252,6 +187,7 @@ def run():
 
     vc.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     run()
