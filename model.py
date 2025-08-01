@@ -17,10 +17,8 @@ import uuid
 # ['0 ka kyee\n', '1 kha khway\n', ... ]
 # keras_class_names = open('./models/teachable_machine/keras_labels.txt', 'r').readlines()
 
-
 mnv2_model   = load_model('./models/mobile_net_v2/mobilenetv2_burmese.h5', compile=True)
 mnv2_class_names = open('./models/augmented/labels.txt', 'r').readlines()
-
 
 def strip_class_name(class_name):
     space_index = class_name.find(' ')
@@ -37,7 +35,7 @@ def predict_alphabet(canvas, image, text_loc):
 
     text = f'{strip_class_name(class_name)}-{str(np.round(confidence_score * 100))[:-2]}%'
     cv2.putText(canvas, text, (text_loc[0]-10, text_loc[1]-10), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, cv2.LINE_AA)
     
     return class_name
 

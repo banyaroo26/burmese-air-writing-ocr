@@ -8,7 +8,7 @@ np.set_printoptions(suppress=True)
 
 save_mode, brush_mode = False, True
 
-threshold = 50 # between middle and index fingers tips
+threshold = 50  # between middle and index fingers tips
 
 brush_size = 5
 
@@ -98,7 +98,7 @@ def run():
 
                     delay_frames = 0
 
-                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 255, 0), -1) # yellow preview circle
+                    cv2.circle(frame, (finger_x, finger_y), 5, (0, 255, 0), -1) # green preview circle
                     
                     # draw on canvas if finger is moving
                     if prev_x and prev_y:
@@ -187,7 +187,6 @@ def run():
 
     vc.release()
     cv2.destroyAllWindows()
-
 
 if __name__ == '__main__':
     run()
