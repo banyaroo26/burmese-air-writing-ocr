@@ -15,6 +15,8 @@ brush_size = 5
 
 safe_w, safe_h = 640, 480
 
+to_predict = []
+
 def clear_canvas(chn3=True):
     h, w = int(safe_h), int(safe_w)
     if chn3:
@@ -51,7 +53,7 @@ vc.set(cv2.CAP_PROP_FRAME_HEIGHT, safe_h)
 vc.set(cv2.CAP_PROP_FPS, 15)
 vc.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-def process():
+def run():
 
     global canvas, clean_canvas, delay_frames
     global save_mode, brush_mode, threshold, brush_size
@@ -121,7 +123,7 @@ def process():
 
         # print(delay_frames)
 
-        if delay_frames > 20:
+        if delay_frames > 50:
             # find contours from clean_canvas
             contours, _ = cv2.findContours(cv2.cvtColor(clean_canvas, cv2.COLOR_BGR2GRAY), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             # cv2.drawContours(contour_canvas, contours, -1, 255) # -1 means draw all contours
@@ -129,27 +131,41 @@ def process():
             if contours:
                 # smallest x-axis and y-axis value out of all contours drawn currently
                 # boundingRect(c) -> top left x,y values and width and height of c
+                '''
                 x_min = min(cv2.boundingRect(c)[0] for c in contours)
                 y_min = min(cv2.boundingRect(c)[1] for c in contours)
                 x_max = max(cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2] for c in contours)
                 y_max = max(cv2.boundingRect(c)[1] + cv2.boundingRect(c)[3] for c in contours)
+                '''
 
-                cropped = clean_canvas.copy()[y_min: y_max, x_min: x_max]
-                cropped = cv2.resize(cropped, (83, 84), interpolation=cv2.INTER_LANCZOS4)  
+                for c in contours:
 
-                # print(cropped.shape)
+                    print('do')
 
-                # cv2.imshow('83x84', cropped)
+                    x_min = cv2.boundingRect(c)[0]
+                    y_min = cv2.boundingRect(c)[1]
+                    w     = cv2.boundingRect(c)[2]
+                    h     = cv2.boundingRect(c)[3]
+                    x_max = x_min + w
+                    y_max = y_min + h
 
-                cv2.rectangle(canvas, (x_min, y_min), (x_max, y_max), 255, 3)
-                # clean_canvas, contour_canvas = clear_canvas(chn3=True), clear_canvas(chn3=False)
-                clean_canvas = clear_canvas(chn3=True)
+                    cropped = clean_canvas.copy()[y_min: y_max, x_min: x_max]
+                    cropped = cv2.resize(cropped, (83, 84), interpolation=cv2.INTER_LANCZOS4) 
 
-                preprocessed_img = preprocess_alphabet(image=cropped)
-                predicted_class = predict_alphabet(canvas=canvas, image=preprocessed_img, text_loc=(x_min, y_min))
+                    # Remove contour area by filling it with black (canvas color)
+                    cv2.rectangle(clean_canvas, (x_min, y_min), (x_max, y_max), (0, 0, 0), thickness=cv2.FILLED)
 
-                if save_mode: 
-                    save_userinput(class_name=predicted_class, image=cropped)
+                    cv2.imshow('', cropped)
+
+                    cv2.rectangle(canvas, (x_min, y_min), (x_max, y_max), 255, 3)
+                    # clean_canvas, contour_canvas = clear_canvas(chn3=True), clear_canvas(chn3=False)
+                    # clean_canvas = clear_canvas(chn3=True)
+
+                    preprocessed_img = preprocess_alphabet(image=cropped)
+                    predicted_class = predict_alphabet(canvas=canvas, image=preprocessed_img, text_loc=(x_min, y_min))
+
+                    if save_mode: 
+                        save_userinput(class_name=predicted_class, image=cropped)
 
         # overlay two images
         frame = cv2.addWeighted(frame, 0.6, canvas, 0.4, 0)
@@ -165,12 +181,12 @@ def process():
         if save_mode: 
             cv2.putText(frame, 'User inputs are being saved', (5,60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
 
-        # cv2.imshow('frame', frame)
-        # cv2.imshow('canvas', canvas)
-        # cv2.imshow('clean canvas', clean_canvas)
+        cv2.imshow('frame', frame)
+        cv2.imshow('canvas', canvas)
+        cv2.imshow('clean canvas', clean_canvas)
         # cv2.imshow('contour canvas', contour_canvas)
 
-        yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         key = cv2.waitKey(1)
         if key == 27: # esc
@@ -189,15 +205,6 @@ def process():
     vc.release()
     cv2.destroyAllWindows()
 
-with gr.Blocks(title="OpenCV Frame Processing with Gradio") as demo:
-    output_image = gr.Image(
-        type="numpy", 
-        streaming=True,
-        height=480,
-        width=640,
-        )
-    
-    # Run function when app loads or when inputs (none in this case) change
-    demo.load(fn=process, outputs=output_image)
 
-demo.launch()
+if __name__ == '__main__':
+    run()
