@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from model import predict_alphabet, preprocess_alphabet, save_userinput
+import gradio as gr
 
 # Disable scientific notation for clarity
 np.set_printoptions(suppress=True)
@@ -14,7 +15,6 @@ brush_size = 5
 
 safe_w, safe_h = 640, 480
 
-
 def clear_canvas(chn3=True):
     h, w = int(safe_h), int(safe_w)
     if chn3:
@@ -24,38 +24,37 @@ def clear_canvas(chn3=True):
         return np.zeros((h, w), dtype=np.uint8)
         # return np.zeros((480, 640, 3), dtype=np.uint8)
 
-
 # contour_canvas = clear_canvas(chn3=False)
 canvas, clean_canvas = clear_canvas(chn3=True), clear_canvas(chn3=True)
 
+delay_frames = 0  # delay counter before drawing contours
 
-def run():
+prev_x, prev_y = None, None  # previous finger position
 
-    # global contour_canvas
-    global canvas, clean_canvas
+# Initialize MediaPipe Hands
+mp_hands   = mp.solutions.hands
+
+# Instantiate the Hands class
+hands = mp_hands.Hands(
+    static_image_mode=False,       # False for video streams (better performance)
+    max_num_hands=1,               # Max number of hands to detect
+    min_detection_confidence=0.5,  # Confidence threshold to start tracking
+    min_tracking_confidence=0.5    # Confidence threshold to continue tracking
+)
+
+# For drawing landmarks
+mp_drawing = mp.solutions.drawing_utils 
+
+vc = cv2.VideoCapture(index=0)
+vc.set(cv2.CAP_PROP_FRAME_WIDTH, safe_w)
+vc.set(cv2.CAP_PROP_FRAME_HEIGHT, safe_h)
+vc.set(cv2.CAP_PROP_FPS, 15)
+vc.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+def process():
+
+    global canvas, clean_canvas, delay_frames
     global save_mode, brush_mode, threshold, brush_size
-
-    delay_frames = 0  # delay counter before drawing contours
-
-    prev_x, prev_y = None, None  # previous finger position
-
-    # Initialize MediaPipe Hands
-    mp_hands   = mp.solutions.hands
-
-    # Instantiate the Hands class
-    hands = mp_hands.Hands(
-        static_image_mode=False,       # False for video streams (better performance)
-        max_num_hands=1,               # Max number of hands to detect
-        min_detection_confidence=0.5,  # Confidence threshold to start tracking
-        min_tracking_confidence=0.5    # Confidence threshold to continue tracking
-    )
-
-    # For drawing landmarks
-    mp_drawing = mp.solutions.drawing_utils 
-
-    vc = cv2.VideoCapture(index=0)
-    vc.set(cv2.CAP_PROP_FRAME_WIDTH, safe_w)
-    vc.set(cv2.CAP_PROP_FRAME_HEIGHT, safe_h)
 
     while vc.isOpened():
         _, frame = vc.read()
@@ -166,10 +165,12 @@ def run():
         if save_mode: 
             cv2.putText(frame, 'User inputs are being saved', (5,60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
 
-        cv2.imshow('frame', frame)
+        # cv2.imshow('frame', frame)
         # cv2.imshow('canvas', canvas)
         # cv2.imshow('clean canvas', clean_canvas)
         # cv2.imshow('contour canvas', contour_canvas)
+
+        yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         key = cv2.waitKey(1)
         if key == 27: # esc
@@ -188,6 +189,15 @@ def run():
     vc.release()
     cv2.destroyAllWindows()
 
+with gr.Blocks(title="OpenCV Frame Processing with Gradio") as demo:
+    output_image = gr.Image(
+        type="numpy", 
+        streaming=True,
+        height=480,
+        width=640,
+        )
+    
+    # Run function when app loads or when inputs (none in this case) change
+    demo.load(fn=process, outputs=output_image)
 
-if __name__ == '__main__':
-    run()
+demo.launch()
