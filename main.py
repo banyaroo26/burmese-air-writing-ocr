@@ -139,8 +139,6 @@ def run():
 
                 for c in contours:
 
-                    print('do')
-
                     x_min = cv2.boundingRect(c)[0]
                     y_min = cv2.boundingRect(c)[1]
                     w     = cv2.boundingRect(c)[2]
