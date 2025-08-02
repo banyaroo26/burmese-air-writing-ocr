@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title> Air Canvas + Classification </title>
+    <style>
+        :root {
+            --primary: #6b8cff;
+            --secondary: #2d3748;
+            --bg-dark: #1a202c;
+            --bg-darker: #12161f;
+            --text: #e2e8f0;
+            --text-light: #a0aec0;
+            --border: #2d3748;
+            --accent: #6b8cff;
+            --danger: #f56565;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 25px;
+            background: var(--bg-darker);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+        }
+
+        h1 {
+            color: var(--primary);
+        }
+
+        .video-container {
+            width: 640px;
+            height: 480px;
+            margin: 0 auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .control-panel {
+            margin-top: 25px;
+            background: var(--secondary);
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section h3 {
+            margin-bottom: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        #move-mode {
+            background-color: #4fd1c5; /* Teal */
+        }
+
+        #save-mode {
+            background-color: #68d391; /* Green */
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+        }
+
+        #classify-alphabets {
+            background-color: #2980b9; /* Blue */
+        }
+
+        #classify-numbers {
+            background-color: #8e44ad; /* Purple */
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border);
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .powered-by {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        @media (max-width: 700px) {
+            .container {
+                margin: 20px;
+                padding: 15px;
+            }
+
+            .video-container {
+                width: 100%;
+                height: auto;
+                aspect-ratio: 4/3;
+            }
+
+            .button-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Air Canvas + Classification</h1>
+        {# <p class="status">Streaming at 640×480 resolution</p> #}
+    </header>
+
+    <div class="video-container">
+        <img src="/video_feed" alt="Live video feed">
+    </div>
+
+    <div class="control-panel">
+        <div class="control-section">
+            <h3>Drawing Mode</h3>
+            <div class="button-group">
+                <button class="btn" id="move-mode">Move Mode</button>
+                <button class="btn" id="save-mode">Save Mode</button>
+                <button class="btn btn-danger" id="clear-canvas">Clear Canvas</button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>Classifiers</h3>
+            <div class="button-group">
+                <button class="btn" id="classify-alphabets">MobileNetV2 Alphabets</button>
+                <button class="btn" id="classify-numbers">MobileNetV2 Numbers</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <span class="powered-by">Powered by</span> Flask • Video Annotation Tool
+    </div>
+</div>
+
+<script>
+    // Handle mode selection
+    document.getElementById('move-mode').addEventListener('click', () => {
+        switchMode('move-mode');
+    });
+
+    document.getElementById('save-mode').addEventListener('click', () => {
+        switchMode('save-mode');
+    });
+
+    // Handle classifier selection
+    document.getElementById('classify-alphabets').addEventListener('click', () => {
+        switchClassifier('classify-alphabets');
+    });
+
+    document.getElementById('classify-numbers').addEventListener('click', () => {
+        switchClassifier('classify-numbers');
+    });
+
+    // Clear canvas button
+    document.getElementById('clear-canvas').addEventListener('click', () => {
+        fetch('/clear-canvas', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => console.log('Canvas cleared:', data))
+            .catch(error => console.error('Error clearing canvas:', error));
+    });
+
+    function switchMode(mode) {
+        fetch('/switch-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        })
+        .then(response => response.json())
+        .then(data => console.log('Mode set:', data))
+        .catch(error => console.error('Error setting mode:', error));
+    }
+
+    function switchClassifier(mode) {
+        fetch('/switch-classifier', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        })
+        .then(response => response.json())
+        .then(data => console.log('Mode set:', data))
+        .catch(error => console.error('Error setting mode:', error));
+    }
+</script>
+</body>
+</html>

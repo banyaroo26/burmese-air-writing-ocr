@@ -211,12 +211,13 @@ def run():
 
                         if selected_object_id is None:
                             if select_object_at_position(finger_x, finger_y):
-                                print('selected')
+                                # print('selected')
+                                pass
 
                         else:
                             if not select_object_at_position(finger_x, finger_y):
                                 selected_object_id = None
-                                print('de-selected')
+                                # print('de-selected')
 
         # if hand is not detected
         else:
@@ -266,6 +267,8 @@ def run():
 
         # overlay two images
         frame = cv2.addWeighted(frame, 0.6, canvas, 0.4, 0)
+
+        # yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         if brush_mode:
             draw_mode = 'brush'
@@ -279,7 +282,7 @@ def run():
             cv2.putText(frame, 'Move mode enabled', (5,60), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
         if save_mode: 
             cv2.putText(frame, 'User inputs are being saved', (5,75), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 1, cv2.LINE_AA)
-
+            
         cv2.imshow('frame', frame)
         # cv2.imshow('canvas', canvas)
         # cv2.imshow('clean canvas', clean_canvas)

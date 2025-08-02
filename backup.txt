@@ -29,3 +29,20 @@ assert model_config_string.find('"groups": 1,') == -1
 '''
 
 # ---------------------------------------------------- #
+
+'''
+def generate_frames():
+# OpenCV VideoCapture (0 for webcam, or provide video file path)
+camera = cv2.VideoCapture(0)
+while True:
+    success, frame = camera.read()
+    if not success:
+        break
+    else:
+        # Encode frame as JPEG
+        _, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        # Yield frame as part of a multipart HTTP response
+        yield (b'--frame\r\n'
+            b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+'''

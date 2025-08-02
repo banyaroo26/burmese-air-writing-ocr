@@ -18,8 +18,8 @@ import uuid
 # keras_class_names = open('./models/teachable_machine/keras_labels.txt', 'r').readlines()
 
 
-mnv2_model = load_model('./models/augmented/augmented_burmese.h5', compile=True)
-mnv2_class_names = open('./models/augmented/labels.txt', 'r').readlines()
+classifier = load_model('./models/augmented/augmented_burmese.h5', compile=True)
+class_names = open('./models/augmented/labels.txt', 'r').readlines()
 
 
 def strip_class_name(class_name):
@@ -30,9 +30,9 @@ def strip_class_name(class_name):
 
 
 def predict_alphabet(canvas, image, text_loc):
-    prediction = mnv2_model.predict(image)  # class probabilites [x, x, ...]
+    prediction = classifier.predict(image)  # class probabilites [x, x, ...]
     index      = np.argmax(prediction)  # argmax flattens the array and return index
-    class_name = mnv2_class_names[index]
+    class_name = class_names[index]
     confidence_score = prediction[0][index]
 
     text = f'{strip_class_name(class_name)}-{str(np.round(confidence_score * 100))[:-2]}%'
@@ -64,6 +64,16 @@ def save_userinput(class_name, image):
         os.makedirs(f'./userinput/{folder_name}', exist_ok=True)
 
     return cv2.imwrite(f'./userinput/{folder_name}/{random_filename}.jpg', image)
+
+
+def change_classifier(classifier_type):
+    global class_names, classifier
+    if classifier_type == 1:
+        classifier = load_model('./models/numbers/numbers_burmese.h5', compile=True)
+        class_names = open('./models/numbers/numbers_labels.txt', 'r').readlines()
+    elif classifier_type == 2:
+        classifier = load_model('./models/augmented/augmented_burmese.h5', compile=True)
+        class_names = open('./models/augmented/labels.txt', 'r').readlines()
 
 
 # test with logistic regression before 
